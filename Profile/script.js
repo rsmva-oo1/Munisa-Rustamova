@@ -164,25 +164,65 @@ function initContactForm() {
     const form = document.getElementById('contact-form');
     if (!form) return;
 
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        const formData = new FormData(form);
+        
+        const emailInput = form.querySelector('input[type="email"]');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const emailValue = emailInput ? emailInput.value.trim() : "";
 
-        fetch(form.action, {
-            method: form.method,
-            body: formData,
-            headers: { 'Accept': 'application/json' }
-        }).then(response => {
-            if (response.ok) {
-                showPopup("✅ Xabaringiz muvaffaqiyatli yuborildi!");
-                form.reset();
+        // 1. Birinchi navbatda oddiy format tekshiruvi (Regex)
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailPattern.test(emailValue)) {
+            showPopup("❌ Email formati xato!");
+            return;
+        }
+
+        // Tugmani kutish rejimiga o'tkazish
+        const originalBtnText = submitBtn.textContent;
+        submitBtn.textContent = "Tekshirilmoqda...";
+        submitBtn.disabled = true;
+
+        try {
+            // 2. Abstract API orqali haqiqiy ekanligini tekshirish
+            const API_KEY = "26b68213c6684486a36ca9743d5527fe";
+            const response = await fetch(`https://emailvalidation.abstractapi.com/v1/?api_key=${API_KEY}&email=${emailValue}`);
+            const data = await response.json();
+
+            // Agar email haqiqatda mavjud bo'lsa (deliverability === "DELIVERABLE")
+            if (data.deliverability === "DELIVERABLE") {
+                
+                // 3. Formspree-ga yuborish
+                const formData = new FormData(form);
+                const formResponse = await fetch(form.action, {
+                    method: form.method,
+                    body: formData,
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (formResponse.ok) {
+                    showPopup("✅ Xabaringiz muvaffaqiyatli yuborildi!");
+                    form.reset();
+                    emailInput.style.border = "none";
+                } else {
+                    showPopup("❌ Formspree-da xatolik yuz berdi.");
+                }
+
             } else {
-                showPopup("❌ Xatolik yuz berdi. Qayta urinib ko‘ring.");
+                // Agar email formatga tushsa-yu, lekin mavjud bo'lmasa (fake bo'lsa)
+                showPopup("❌ Bunday email manzili mavjud emas!");
+                emailInput.style.border = "2px solid red";
             }
-        }).catch(error => {
-            showPopup("❌ Xatolik yuz berdi. Qayta urinib ko‘ring.");
-            console.error(error);
-        });
+
+        } catch (error) {
+            // Internet uzilib qolsa yoki API'da muammo bo'lsa
+            console.error("Xatolik:", error);
+            showPopup("⚠️ Tarmoq xatosi. Iltimos, qayta urinib ko'ring.");
+        } finally {
+            // Tugmani asl holiga qaytarish
+            submitBtn.textContent = originalBtnText;
+            submitBtn.disabled = false;
+        }
     });
 }
 
